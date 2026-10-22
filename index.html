@@ -1,0 +1,628 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="レムプレイヤー">
+<link rel="apple-touch-icon" href="icon.png"><link rel="manifest" href="manifest.json">
+<script>window.__noClaude=true;</script>
+<style>[hidden]{display:none!important}body{margin:0;font-size:14px}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box;height:100%}img{max-width:100%}</style>
+</head><body><title>レムプレイヤー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<style>
+/* Layout: one-screen handheld. A slim chrome bar on top; below it the "stage" wears the active skin,
+   holding the LCD and a free-form control layer whose buttons the player can move and resize. */
+:root{
+  --bg:#eef0f6; --surface:#ffffff; --surface-2:#f5f6fb; --line:#d6d9e6; --fg:#1d2033; --muted:#5d6280;
+  --accent:#4b6fd6; --accent-fg:#ffffff; --danger:#c8435a; --ok:#2f8f6a;
+  --font-ui:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --font-dot:"DotGothic16","Zen Kaku Gothic New",monospace;
+  --radius:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12131c; --surface:#1b1d2a; --surface-2:#232637; --line:#33374d; --fg:#e8eaf6; --muted:#a3a8c4;
+  --accent:#8ea8ff; --accent-fg:#10142a; --danger:#ff7d93; --ok:#6ad3a6; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12131c; --surface:#1b1d2a; --surface-2:#232637; --line:#33374d; --fg:#e8eaf6; --muted:#a3a8c4;
+  --accent:#8ea8ff; --accent-fg:#10142a; --danger:#ff7d93; --ok:#6ad3a6; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+#app{height:100%;display:flex;flex-direction:column}
+.bar{display:flex;align-items:center;gap:8px;padding-block:6px;
+  padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));
+  background:var(--surface);border-bottom:1px solid var(--line);flex:none;min-height:44px}
+.brand{font-family:var(--font-dot);font-size:15px;letter-spacing:.04em;white-space:nowrap}
+.rom-name{flex:1;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:6px 12px;font-size:13px;line-height:1;white-space:nowrap}
+.chip.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+
+/* ---------- stage (wears the skin) ---------- */
+#stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+  background-color:var(--sk-bg);background-image:var(--sk-img,none);background-size:cover;background-position:center;
+  padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+#screenWrap{position:relative;flex:none;display:flex;justify-content:center;align-items:center;padding:10px}
+#lcd{position:relative;background:var(--sk-frame);border-radius:var(--sk-frame-r,14px);padding:var(--sk-frame-pad,10px);
+  box-shadow:0 6px 18px rgba(0,0,0,.25);max-width:100%}
+#screen{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;background:#000;border-radius:3px;aspect-ratio:3/2}
+#welcome{position:absolute;inset:var(--sk-frame-pad,10px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  background:#0b0d16;color:#e9ecff;border-radius:3px;text-align:center;padding:12px}
+#welcome strong{font-family:var(--font-dot);font-size:clamp(18px,5vw,28px);letter-spacing:.06em}
+#welcome p{margin:0;font-size:12px;color:#aab1d6;max-width:30ch}
+#welcome .chip{background:#e9ecff;color:#151a35;border-color:#e9ecff}
+#pad{position:relative;flex:1;min-height:0;touch-action:none}
+@media (max-width:480px){.brand{display:none}}
+#lcd{box-sizing:border-box}
+
+/* landscape: the screen sits in the middle and the controls float over the whole stage */
+@media (orientation:landscape) and (max-height:600px){
+  #stage{display:block}
+  #screenWrap{position:absolute;inset:0;padding:6px}
+  #lcd{height:calc(100% - 4px);aspect-ratio:auto;display:flex;align-items:center}
+  #screen{height:100%;width:auto}
+  #pad{position:absolute;inset:0}
+}
+
+.ctl{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(var(--s,1));touch-action:none;
+  display:flex;align-items:center;justify-content:center;opacity:var(--sk-opacity,1);
+  color:var(--sk-btn-fg);font-family:var(--font-dot);font-size:15px;letter-spacing:.04em;transition:filter .06s}
+.ctl.on{filter:brightness(.78)}
+.ctl.round{width:64px;height:64px;border-radius:50%;background:var(--sk-btn);box-shadow:inset 0 -4px 0 rgba(0,0,0,.25),0 3px 8px rgba(0,0,0,.25);font-size:20px}
+.ctl.round.a{background:var(--sk-a,var(--sk-btn))}
+.ctl.round.b{background:var(--sk-b,var(--sk-btn))}
+.ctl.shoulder{width:92px;height:36px;border-radius:var(--sk-shape,18px);background:var(--sk-btn);box-shadow:inset 0 -3px 0 rgba(0,0,0,.25)}
+.ctl.pill{width:66px;height:26px;border-radius:13px;background:var(--sk-pill,var(--sk-btn));font-size:11px;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}
+.ctl.tool{width:56px;height:30px;border-radius:9px;background:var(--sk-pill,var(--sk-btn));font-size:11px;font-family:var(--font-ui);font-weight:700}
+.ctl.dpad{width:140px;height:140px}
+.dpad svg{width:100%;height:100%;overflow:visible}
+.dpad .cross{fill:var(--sk-dpad)}
+.dpad .arrow{fill:var(--sk-btn-fg);opacity:.75}
+.dpad .hl{fill:#fff;opacity:0}
+.dpad[data-dir~="u"] .hl.u,.dpad[data-dir~="d"] .hl.d,.dpad[data-dir~="l"] .hl.l,.dpad[data-dir~="r"] .hl.r{opacity:.28}
+.ctl[hidden]{display:none}
+
+/* edit mode */
+#pad.editing .ctl{outline:2px dashed rgba(255,255,255,.75);outline-offset:4px;opacity:1}
+#pad.editing .ctl.sel{outline-color:#ffd34d;outline-style:solid}
+#pad.editing .ctl.off{opacity:.3}
+#pad.editing::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 23px,rgba(255,255,255,.08) 23px 24px),repeating-linear-gradient(90deg,transparent 0 23px,rgba(255,255,255,.08) 23px 24px);pointer-events:none}
+#editBar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);
+  padding-top:10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  display:grid;gap:8px;box-shadow:0 -6px 20px rgba(0,0,0,.18)}
+#editBar .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#editBar label{display:flex;align-items:center;gap:8px;font-size:13px;flex:1;min-width:150px}
+#editBar input[type=range]{flex:1;min-width:0}
+.selname{font-weight:700;font-size:13px;min-width:6em}
+
+/* ---------- sheet ---------- */
+#scrim{position:fixed;inset:0;background:rgba(10,12,24,.45);z-index:20}
+#sheet{position:fixed;z-index:21;left:0;right:0;bottom:0;max-height:min(86%,720px);display:flex;flex-direction:column;
+  background:var(--surface);border-radius:18px 18px 0 0;box-shadow:0 -10px 40px rgba(0,0,0,.3);
+  padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (min-width:760px){#sheet{left:auto;top:0;bottom:0;width:420px;max-height:none;border-radius:0;padding-top:env(safe-area-inset-top,0px)}}
+.sheet-head{display:flex;align-items:center;gap:8px;padding:12px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px))}
+.sheet-head h2{margin:0;font-size:16px;flex:1}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding:0 max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));scrollbar-width:none;flex:none}
+.tabs button{flex:none}
+.panel{overflow-y:auto;padding:4px max(16px,env(safe-area-inset-right,0px)) 20px max(16px,env(safe-area-inset-left,0px));display:grid;gap:14px;align-content:start;-webkit-user-select:text;user-select:text}
+.panel h3{margin:6px 0 0;font-size:13px;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.note{font-size:12px;color:var(--muted);line-height:1.6;margin:0}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 14px;font-size:14px;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.45;cursor:default}
+.status{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.slot{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface-2);display:grid}
+.slot.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.slot canvas,.slot .empty{width:100%;aspect-ratio:3/2;display:block;image-rendering:pixelated;background:#0b0d16}
+.slot .empty{display:flex;align-items:center;justify-content:center;color:#7d84a8;font-family:var(--font-dot);font-size:13px}
+.slot .meta{padding:6px 8px;font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:6px;font-variant-numeric:tabular-nums}
+.slot .acts{display:flex;border-top:1px solid var(--line)}
+.slot .acts button{flex:1;border:0;background:transparent;padding:8px 4px;font-size:12px;font-weight:700}
+.slot .acts button+button{border-left:1px solid var(--line)}
+.skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+.skin{border:1px solid var(--line);border-radius:var(--radius);padding:0;background:var(--surface-2);overflow:hidden;text-align:left;display:grid}
+.skin.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.skin .pv{height:70px;position:relative;background-size:cover;background-position:center}
+.skin .pv i{position:absolute;border-radius:50%;width:16px;height:16px;bottom:10px}
+.skin .pv b{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:54px;height:30px;border-radius:5px}
+.skin span{padding:6px 8px;font-size:12px;font-weight:700}
+.field{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;font-size:13px}
+.field input[type=color]{width:48px;height:32px;border:1px solid var(--line);border-radius:8px;padding:2px;background:var(--surface)}
+.field input[type=text],.field select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);min-width:0;width:12em}
+.field input[type=range]{width:12em}
+.kbd{font-family:ui-monospace,monospace;font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+table.keys{border-collapse:collapse;font-size:12px}
+table.keys td{padding:3px 10px 3px 0}
+#toast{position:fixed;left:50%;top:calc(56px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;max-width:min(92vw,460px);
+  background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:10px;font-size:13px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#toast.err{background:var(--danger);color:#fff}
+#pauseBadge{position:absolute;right:16px;top:16px;font-family:var(--font-dot);font-size:12px;background:rgba(0,0,0,.6);color:#fff;padding:3px 8px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="app">
+  <header class="bar">
+    <span class="brand">レムプレイヤー</span>
+    <span class="rom-name" id="romName">ROM未選択</span>
+    <button class="chip" id="btnOpen">ROM</button>
+    <button class="chip" id="btnPause" disabled>一時停止</button>
+    <button class="chip primary" id="btnMenu">メニュー</button>
+  </header>
+  <main id="stage">
+    <div id="screenWrap">
+      <div id="lcd">
+        <canvas id="screen" width="240" height="160" aria-label="ゲーム画面"></canvas>
+        <div id="welcome">
+          <strong>REMU PLAYER</strong>
+          <p>64MBの改造ROM（ポケモンスタートなど）も、BGMつきで遊べます。ROMはこの端末の中だけで読み込みます。</p>
+          <button class="chip" id="btnOpen2">ROMを開く</button>
+        </div>
+        <span id="pauseBadge" hidden>PAUSE</span>
+      </div>
+    </div>
+    <div id="pad" aria-label="コントローラー"></div>
+  </main>
+  <input type="file" id="romFile" accept=".gba,.zip,.agb,.bin" hidden>
+  <input type="file" id="saveFile" accept=".sav,.zip,.srm,.bin" hidden>
+  <input type="file" id="stateFile" accept=".zip,.state,.ss0,.ss1" hidden>
+  <input type="file" id="skinFile" accept=".json" hidden>
+  <input type="file" id="skinImg" accept="image/*" hidden>
+</div>
+
+<div id="scrim" hidden></div>
+<section id="sheet" hidden aria-label="メニュー">
+  <div class="sheet-head"><h2 id="sheetTitle">メニュー</h2><button class="chip" id="btnClose">とじる</button></div>
+  <nav class="tabs" role="tablist">
+    <button class="chip" data-tab="quick" aria-pressed="true">クイック保存</button>
+    <button class="chip" data-tab="save" aria-pressed="false">セーブ</button>
+    <button class="chip" data-tab="skin" aria-pressed="false">スキン</button>
+    <button class="chip" data-tab="layout" aria-pressed="false">ボタン配置</button>
+    <button class="chip" data-tab="opt" aria-pressed="false">設定</button>
+  </nav>
+
+  <div class="panel" data-panel="quick">
+    <p class="note">いつでも今の状態をまるごと保存できます。スロットはゲームごとに6つ。同じゲームの別バージョンのROMでも、同じスロットを使えます。</p>
+    <div class="slots" id="slots"></div>
+    <h3>ファイル</h3>
+    <div class="btnrow">
+      <button class="btn" id="stateExport" disabled>選んだスロットをファイルに書き出す</button>
+      <button class="btn" id="stateImport" disabled>ファイルから読み込む</button>
+    </div>
+    <p class="status" id="storageInfo"></p>
+  </div>
+
+  <div class="panel" data-panel="save" hidden>
+    <p class="note">ゲーム内の「レポート」で書いたセーブは、数秒ごとにこの端末へ自動で保存されます。機種変更や念のための控えには、ファイルに書き出してください。</p>
+    <p class="status" id="saveStatus">ROMを開くと使えます。</p>
+    <div class="btnrow">
+      <button class="btn primary" id="saveExport" disabled>セーブをファイルに書き出す</button>
+      <button class="btn" id="saveImport" disabled>セーブファイルを読み込む</button>
+    </div>
+    <p class="note">読み込めるのは .sav（ほかのエミュレーターのセーブ）と、このアプリで書き出した .zip です。読み込むとゲームを最初から起動し直します。</p>
+    <h3>ROM</h3>
+    <label class="field"><span>開いたROMをこの端末に覚えておく（次回すぐ再開）</span><input type="checkbox" id="optRememberRom"></label>
+    <p class="note">64MBのROMは端末の容量をかなり使います。覚えておけるのは最後に開いた1本だけです。</p>
+    <div class="btnrow"><button class="btn danger" id="forgetRom">覚えているROMを消す</button></div>
+  </div>
+
+  <div class="panel" data-panel="skin" hidden>
+    <div class="skins" id="skinList"></div>
+    <div class="btnrow">
+      <button class="btn primary" id="skinNew">今のスキンをもとに新しく作る</button>
+      <button class="btn" id="skinImport">スキンを読み込む</button>
+    </div>
+    <div id="skinEditor" hidden style="display:grid;gap:12px">
+      <h3>スキンを編集</h3>
+      <label class="field"><span>名前</span><input type="text" id="skName" maxlength="20"></label>
+      <label class="field"><span>背景の色</span><input type="color" id="skBg"></label>
+      <div class="field"><span>背景の画像</span><span class="btnrow"><button class="btn" id="skImgPick">選ぶ</button><button class="btn danger" id="skImgClear">外す</button></span></div>
+      <label class="field"><span>画面のフチ</span><input type="color" id="skFrame"></label>
+      <label class="field"><span>ボタンの色</span><input type="color" id="skBtn"></label>
+      <label class="field"><span>Aボタンの色</span><input type="color" id="skA"></label>
+      <label class="field"><span>Bボタンの色</span><input type="color" id="skB"></label>
+      <label class="field"><span>十字キーの色</span><input type="color" id="skDpad"></label>
+      <label class="field"><span>ボタンの文字</span><input type="color" id="skFg"></label>
+      <label class="field"><span>L / R の形</span><select id="skShape"><option value="18px">まるい</option><option value="6px">かくばった</option></select></label>
+      <label class="field"><span>ボタンの濃さ</span><input type="range" id="skOpacity" min="0.2" max="1" step="0.05"></label>
+      <div class="btnrow">
+        <button class="btn" id="skExport">ファイルに書き出す</button>
+        <button class="btn danger" id="skDelete">このスキンを削除</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" data-panel="layout" hidden>
+    <p class="note">ボタンを指で動かして、好きな場所と大きさにできます。縦持ちと横持ちで別々に覚えます。</p>
+    <div class="btnrow"><button class="btn primary" id="layoutEdit">ボタン配置を編集する</button></div>
+    <p class="note">いま編集されるのは <b id="layoutOrient">縦持ち</b> の配置です。横持ちを変えたいときは、端末を横にしてから編集してください。</p>
+  </div>
+
+  <div class="panel" data-panel="opt" hidden>
+    <label class="field"><span>音量</span><input type="range" id="optVolume" min="0" max="1" step="0.05"></label>
+    <label class="field"><span>早送りの速さ</span><select id="optSpeed"><option value="2">2倍</option><option value="3">3倍</option><option value="4">4倍</option></select></label>
+    <label class="field"><span>メニューを開いている間は止める</span><input type="checkbox" id="optPauseMenu"></label>
+    <label class="field"><span>ボタンを押すと振動する（対応端末のみ）</span><input type="checkbox" id="optHaptic"></label>
+    <h3>キーボード</h3>
+    <table class="keys"><tbody>
+      <tr><td>十字キー</td><td><span class="kbd">↑↓←→</span></td></tr>
+      <tr><td>A / B</td><td><span class="kbd">X</span> / <span class="kbd">Z</span></td></tr>
+      <tr><td>L / R</td><td><span class="kbd">A</span> / <span class="kbd">S</span></td></tr>
+      <tr><td>START / SELECT</td><td><span class="kbd">Enter</span> / <span class="kbd">Backspace</span></td></tr>
+      <tr><td>早送り（押している間）</td><td><span class="kbd">Space</span></td></tr>
+      <tr><td>クイック保存 / ロード</td><td><span class="kbd">F2</span> / <span class="kbd">F4</span></td></tr>
+    </tbody></table>
+    <h3>このアプリについて</h3>
+    <p class="note">エミュレーターの中身は mGBA（MPL-2.0）の64MB対応版をブラウザ向けに組み立てたものです。ROM・セーブ・スキンはすべてこの端末の中に保存され、外へは送りません。</p>
+    <div class="btnrow"><button class="btn" id="btnReset" disabled>ゲームをリセット</button></div>
+  </div>
+</section>
+
+<div id="editBar" hidden>
+  <div class="row"><span class="selname" id="selName">ボタンを選ぶ</span>
+    <label>大きさ<input type="range" id="selSize" min="0.5" max="2" step="0.05" disabled></label>
+    <button class="btn" id="selHide" disabled>隠す</button></div>
+  <div class="row"><label>ボタン全体の濃さ<input type="range" id="allOpacity" min="0.15" max="1" step="0.05"></label>
+    <button class="btn danger" id="layoutReset">初期配置に戻す</button>
+    <button class="btn primary" id="layoutDone">完了</button></div>
+</div>
+<div id="toast" hidden role="status"></div>
+
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const K={A:1,B:2,SELECT:4,START:8,RIGHT:16,LEFT:32,UP:64,DOWN:128,R:256,L:512};
+const FRAME_MS=1000/59.7275;
+
+/* ---------------- small helpers ---------------- */
+const ls={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(_){return d;}},
+          set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(_){}}};
+let toastTimer;
+function toast(msg,err){const t=$('toast');t.textContent=msg;t.className=err?'err':'';t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.hidden=true,err?6500:2600);}
+function storageError(e){
+  const n=(e&&(e.name||''))+' '+(e&&e.message||'');
+  if(/Quota|quota|space|容量/.test(n))return '端末の保存容量が足りないため、ブラウザに保存できませんでした。「セーブ」の「覚えているROMを消す」で空きを作るか、ファイルに書き出してください。';
+  if(/Security|denied|private/i.test(n))return 'このブラウザでは保存が許可されていません（プライベートブラウズ中など）。ファイルに書き出してください。';
+  return 'ブラウザに保存できませんでした（'+(e&&e.name||'不明なエラー')+'）。ファイルに書き出しておくと安全です。';
+}
+function fmtTime(t){const d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+/* ---------------- IndexedDB key/value ---------------- */
+const idb=(()=>{let p;function open(){return p||(p=new Promise((res,rej)=>{let q;try{q=indexedDB.open('remu-player',1);}catch(e){rej(e);return;}
+  q.onupgradeneeded=()=>q.result.createObjectStore('kv');q.onsuccess=()=>res(q.result);q.onerror=()=>{p=null;rej(q.error);};}));}
+  async function tx(mode,fn){const db=await open();return new Promise((res,rej)=>{const t=db.transaction('kv',mode);const s=t.objectStore('kv');const r=fn(s);
+    t.oncomplete=()=>res(r&&r.result);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('abort'));});}
+  return{get:k=>tx('readonly',s=>s.get(k)),set:(k,v)=>tx('readwrite',s=>s.put(v,k)),del:k=>tx('readwrite',s=>s.delete(k))};})();
+
+/* ---------------- tiny ZIP (store only) ---------------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function zip(files){const enc=new TextEncoder();const parts=[],cen=[];let off=0;
+  for(const f of files){const name=enc.encode(f.name),d=f.data,crc=crc32(d);
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint32(14,crc,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,name.length,true);
+    parts.push(new Uint8Array(h.buffer),name,d);
+    const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint32(16,crc,true);c.setUint32(20,d.length,true);c.setUint32(24,d.length,true);c.setUint16(28,name.length,true);c.setUint32(42,off,true);
+    cen.push(new Uint8Array(c.buffer),name);off+=30+name.length+d.length;}
+  const csize=cen.reduce((a,b)=>a+b.length,0);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,csize,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,new Uint8Array(e.buffer)]);}
+async function unzip(u){/* stored + deflate (via DecompressionStream) */
+  const dv=new DataView(u.buffer,u.byteOffset,u.byteLength);let e=u.length-22;while(e>=0&&dv.getUint32(e,true)!==0x06054b50)e--;if(e<0)throw new Error('zip');
+  const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const out=[];const dec=new TextDecoder();
+  for(let i=0;i<n;i++){const m=dv.getUint16(p+10,true),cs=dv.getUint32(p+20,true),nl=dv.getUint16(p+28,true),xl=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true);
+    const name=dec.decode(u.subarray(p+46,p+46+nl));p+=46+nl+xl+cl;
+    const ds=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true);const raw=u.subarray(ds,ds+cs);
+    let data;if(m===0)data=raw.slice();else if(m===8&&'DecompressionStream' in window){data=new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());}else continue;
+    out.push({name,data});}
+  return out;}
+const isZip=u=>u.length>4&&u[0]===0x50&&u[1]===0x4b&&u[2]===3&&u[3]===4;
+
+/* ---------------- emulator core (mgba.wasm) ---------------- */
+async function createCore(bytes){let mem;const view=()=>new DataView(mem.buffer);const EBADF=8,ENOSYS=52;
+  const wasi={environ_get:()=>0,environ_sizes_get:(c,s)=>{view().setUint32(c,0,true);view().setUint32(s,0,true);return 0;},
+    clock_time_get:(id,pr,out)=>{view().setBigUint64(out,BigInt(Date.now())*1000000n,true);return 0;},
+    fd_write:(fd,iov,n,out)=>{let t=0;const v=view();for(let i=0;i<n;i++)t+=v.getUint32(iov+i*8+4,true);v.setUint32(out,t,true);return 0;},
+    fd_close:()=>0,fd_fdstat_get:()=>EBADF,fd_filestat_get:()=>EBADF,fd_filestat_set_size:()=>EBADF,fd_prestat_get:()=>EBADF,fd_prestat_dir_name:()=>EBADF,
+    fd_read:()=>EBADF,fd_seek:()=>EBADF,fd_sync:()=>0,fd_tell:()=>EBADF,path_create_directory:()=>ENOSYS,path_open:()=>ENOSYS,proc_exit:c=>{throw new Error('exit '+c);}};
+  const {instance}=await WebAssembly.instantiate(bytes,{wasi_snapshot_preview1:wasi});const x=instance.exports;mem=x.memory;x._initialize();
+  const u8=()=>new Uint8Array(mem.buffer);const put=b=>{const p=x.wbuf_alloc(b.length);if(!p)throw new Error('メモリが足りません');u8().set(b,p);return p;};
+  const take=n=>n?u8().slice(x.emu_blob(),x.emu_blob()+n):null;
+  return{load(b){return !!x.emu_load(put(b),b.length);},reset:()=>x.emu_reset(),frame:k=>x.emu_frame(k),
+    video:()=>new Uint8Array(mem.buffer,x.emu_video(),256*160*4),rate:()=>x.emu_audio_rate(),
+    audio(){const n=x.emu_audio_read();return n?new Int16Array(mem.buffer,x.emu_audio_buf(),n*2):null;},
+    exportSave:()=>take(x.emu_save_export()),importSave(b){const p=put(b);const r=x.emu_save_import(p,b.length);x.wbuf_free(p);return !!r;},
+    exportState:()=>take(x.emu_state_export()),importState(b){const p=put(b);const r=x.emu_state_import(p,b.length);x.wbuf_free(p);return !!r;}};}
+
+let wasmBytes=null,core=null,loaded=false,running=false,userPaused=false,gameKey='',gameTitle='',romLabel='';
+async function getWasm(){if(!wasmBytes){const r=await fetch('mgba.wasm');if(!r.ok)throw new Error('エミュレーター本体を読み込めませんでした（'+r.status+'）');wasmBytes=await r.arrayBuffer();}return wasmBytes;}
+
+/* ---------------- video ---------------- */
+const cv=$('screen'),cx=cv.getContext('2d',{alpha:false}),img=cx.createImageData(240,160),img32=new Uint32Array(img.data.buffer);
+function blit(){const v=core.video();const s=new Uint32Array(v.buffer,v.byteOffset,256*160);
+  for(let y=0;y<160;y++){const so=y*256,d=y*240;for(let x=0;x<240;x++)img32[d+x]=s[so+x]|0xFF000000;}cx.putImageData(img,0,0);}
+
+/* ---------------- audio ---------------- */
+let actx=null,gain=null,nextT=0;
+function audioInit(){if(actx)return;try{actx=new (window.AudioContext||window.webkitAudioContext)();gain=actx.createGain();gain.gain.value=settings.volume;gain.connect(actx.destination);}catch(_){actx=null;}}
+function audioResume(){audioInit();if(actx&&actx.state!=='running')actx.resume().catch(()=>{});}
+let pend=[],pendN=0;
+function audioPush(a){if(!actx||actx.state!=='running')return;pend.push(Float32Array.from(a,v=>v/32768));pendN+=a.length/2;
+  if(pendN<1024)return;const rate=core.rate();const buf=actx.createBuffer(2,pendN,rate);const L=buf.getChannelData(0),R=buf.getChannelData(1);let o=0;
+  for(const p of pend){for(let i=0;i<p.length;i+=2){L[o]=p[i];R[o]=p[i+1];o++;}}pend=[];pendN=0;
+  const now=actx.currentTime;if(nextT<now+0.02)nextT=now+0.06;if(nextT>now+0.35)return;/* too far ahead: drop */
+  const s=actx.createBufferSource();s.buffer=buf;s.connect(gain);s.start(nextT);nextT+=buf.duration;}
+
+/* ---------------- input ---------------- */
+let touchKeys=0,kbdKeys=0,fastHeld=false;
+const keyMap={ArrowUp:K.UP,ArrowDown:K.DOWN,ArrowLeft:K.LEFT,ArrowRight:K.RIGHT,KeyX:K.A,KeyZ:K.B,KeyA:K.L,KeyS:K.R,Enter:K.START,Backspace:K.SELECT,ShiftRight:K.SELECT};
+addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('input,select,textarea'))return;
+  if(keyMap[e.code]){kbdKeys|=keyMap[e.code];e.preventDefault();audioResume();}
+  else if(e.code==='Space'){fastHeld=true;e.preventDefault();}
+  else if(e.code==='F2'){e.preventDefault();quickSave(curSlot);}else if(e.code==='F4'){e.preventDefault();quickLoad(curSlot);}});
+addEventListener('keyup',e=>{if(keyMap[e.code])kbdKeys&=~keyMap[e.code];else if(e.code==='Space')fastHeld=false;});
+
+/* ---------------- main loop ---------------- */
+let acc=0,last=0,speed=1,fastToggle=false;
+function step(){const sp=(fastToggle||fastHeld)?settings.fast:1;const keys=touchKeys|kbdKeys;
+  for(let i=0;i<sp;i++){core.frame(keys);const a=core.audio();if(a&&sp===1)audioPush(a);}}
+function loop(t){requestAnimationFrame(loop);if(!running){last=t;return;}
+  let dt=t-last;last=t;if(dt>100)dt=FRAME_MS;acc+=dt;let n=0;while(acc>=FRAME_MS&&n<4){step();acc-=FRAME_MS;n++;}if(n===4)acc=0;if(n)blit();}
+requestAnimationFrame(loop);
+function updateRunning(){const menuOpen=!$('sheet').hidden&&settings.pauseMenu;const editing=!$('editBar').hidden;
+  running=loaded&&!userPaused&&!menuOpen&&!editing&&!document.hidden;$('pauseBadge').hidden=!(loaded&&!running);
+  $('btnPause').textContent=userPaused?'再開':'一時停止';}
+document.addEventListener('visibilitychange',()=>{updateRunning();if(document.hidden)flushSave();});
+addEventListener('pagehide',()=>flushSave());
+
+/* ---------------- settings ---------------- */
+const settings=Object.assign({volume:0.8,fast:3,pauseMenu:true,haptic:true,rememberRom:false},ls.get('remu-settings',{}));
+function saveSettings(){ls.set('remu-settings',settings);}
+
+/* ---------------- ROM loading ---------------- */
+function headerInfo(u){const d=new TextDecoder('latin1');const title=d.decode(u.subarray(0xA0,0xAC)).replace(/\0+$/,'').trim();const code=d.decode(u.subarray(0xAC,0xB0)).replace(/\0/g,'');return{title,code};}
+async function loadRom(u,name,fromStore){
+  if(isZip(u)){const fs=await unzip(u);const f=fs.find(f=>/\.(gba|agb|bin)$/i.test(f.name));if(!f)throw new Error('zipの中にGBAのROMがありません');u=f.data;name=f.name;}
+  if(u.length<0xC0||u[0xB2]!==0x96)throw new Error('GBAのROMではないようです');
+  toast('ROMを読み込んでいます…');
+  await flushSave();
+  if(!core)core=await createCore(await getWasm());
+  else{core=await createCore(await getWasm());}/* fresh instance frees the previous 64MB ROM */
+  if(!core.load(u))throw new Error('このROMは起動できませんでした');
+  const h=headerInfo(u);gameKey=(h.title+'_'+h.code).replace(/[^\w.-]/g,'_')||'game';gameTitle=h.title;romLabel=name.replace(/\.(gba|agb|bin)$/i,'');
+  $('romName').textContent=romLabel+'（'+(u.length/1048576).toFixed(0)+'MB）';
+  let restored=false;try{const s=await idb.get('save:'+gameKey);if(s&&s.data){core.importSave(new Uint8Array(s.data));core.reset();restored=true;}}catch(_){}
+  lastSaveHash=hashOf(core.exportSave());
+  loaded=true;$('welcome').hidden=true;userPaused=false;['btnPause','saveExport','saveImport','stateExport','stateImport','btnReset'].forEach(i=>$(i).disabled=false);
+  updateRunning();refreshSaveStatus(restored);await refreshSlots();audioResume();
+  toast(restored?'ROMを開きました。前回のセーブも読み込みました':'ROMを開きました');
+  if(settings.rememberRom&&!fromStore){try{await idb.set('rom:last',{name,data:u.buffer.slice(u.byteOffset,u.byteOffset+u.length)});}catch(e){toast(storageError(e),true);}}
+  refreshStorage();}
+function pickRom(){$('romFile').click();}
+$('btnOpen').onclick=pickRom;$('btnOpen2').onclick=pickRom;
+$('romFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;audioResume();
+  try{await loadRom(new Uint8Array(await f.arrayBuffer()),f.name,false);}catch(err){toast(err.message||String(err),true);}};
+
+/* ---------------- in-game save (SRAM/flash) ---------------- */
+let lastSaveHash=0,lastSavedAt=0;
+function hashOf(u){if(!u)return 0;let h=2166136261;for(let i=0;i<u.length;i+=7)h=Math.imul(h^u[i],16777619);return h>>>0;}
+async function flushSave(force){if(!loaded||!core)return;const s=core.exportSave();if(!s)return;const h=hashOf(s);if(!force&&h===lastSaveHash)return;
+  try{await idb.set('save:'+gameKey,{data:s.buffer,updated:Date.now(),rom:romLabel});lastSaveHash=h;lastSavedAt=Date.now();refreshSaveStatus();}
+  catch(e){toast(storageError(e),true);}}
+setInterval(()=>{if(running)flushSave();},3000);
+function refreshSaveStatus(restored){if(!loaded){$('saveStatus').textContent='ROMを開くと使えます。';return;}
+  $('saveStatus').textContent='ゲーム：'+gameTitle+(lastSavedAt?' ／ 最後に端末へ保存：'+fmtTime(lastSavedAt):restored?' ／ 端末のセーブを読み込み済み':' ／ まだ保存していません');}
+let downloadsCap=null;
+async function offerFile(filename,blob){
+  if(!downloadsCap&&window.claude&&window.claude.use&&!window.__noClaude){try{downloadsCap=await window.claude.use('downloads');}catch(_){}}
+  if(!downloadsCap){try{const b=typeof blob==='string'?new Blob([blob],{type:'application/json'}):blob;const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000);toast('ファイルを書き出しました');return true;}catch(e){toast('書き出せませんでした',true);return false;}}
+  try{await downloadsCap.save({filename,data:blob});toast('ファイルを書き出しました');return true;}
+  catch(e){if(e&&e.code==='declined')return false;toast(e&&e.code==='rate_limited'?'少し待ってから、もう一度押してください':'書き出せませんでした（'+(e&&e.code||'エラー')+'）',true);return false;}}
+$('saveExport').onclick=async()=>{const s=core.exportSave();if(!s){toast('セーブデータがありません',true);return;}
+  await offerFile(romLabel+'_save.zip',zip([{name:gameTitle+'.sav',data:s}]));};
+$('saveImport').onclick=()=>$('saveFile').click();
+$('saveFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{let u=new Uint8Array(await f.arrayBuffer());if(isZip(u)){const fs=await unzip(u);const s=fs.find(x=>/\.(sav|srm|bin)$/i.test(x.name))||fs[0];if(!s)throw new Error('zipの中にセーブがありません');u=s.data;}
+    if(!core.importSave(u))throw new Error('このセーブは読み込めませんでした');core.reset();await flushSave(true);toast('セーブを読み込んで、ゲームを起動し直しました');}
+  catch(err){toast(err.message,true);}};
+
+/* ---------------- quick save slots ---------------- */
+const SLOTS=6;let curSlot=ls.get('remu-slot',0),slotMeta=[];
+const slotKey=i=>'state:'+gameKey+':'+i;
+async function refreshSlots(){const box=$('slots');box.textContent='';slotMeta=[];
+  for(let i=0;i<SLOTS;i++){let m=null;if(loaded){try{m=await idb.get(slotKey(i));}catch(_){}}slotMeta.push(m);
+    const el=document.createElement('div');el.className='slot'+(i===curSlot?' cur':'');
+    if(m&&m.thumb){const c=document.createElement('canvas');c.width=240;c.height=160;c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(m.thumb),240,160),0,0);el.append(c);}
+    else{const d=document.createElement('div');d.className='empty';d.textContent=loaded?'空き':'—';el.append(d);}
+    const meta=document.createElement('div');meta.className='meta';meta.innerHTML='<span>スロット'+(i+1)+'</span><span>'+(m?fmtTime(m.updated):'')+'</span>';el.append(meta);
+    const acts=document.createElement('div');acts.className='acts';
+    const bs=document.createElement('button');bs.textContent='保存';bs.disabled=!loaded;bs.onclick=()=>quickSave(i);
+    const bl=document.createElement('button');bl.textContent='ロード';bl.disabled=!loaded||!m;bl.onclick=()=>quickLoad(i);
+    acts.append(bs,bl);el.append(acts);el.addEventListener('click',ev=>{if(ev.target.tagName!=='BUTTON'){curSlot=i;ls.set('remu-slot',i);refreshSlots();}});box.append(el);}}
+async function quickSave(i){if(!loaded)return;curSlot=i;ls.set('remu-slot',i);
+  const st=core.exportState();if(!st){toast('今の状態を書き出せませんでした（エミュレーターが状態を作れませんでした）',true);return;}
+  const thumb=img.data.slice().buffer;const rec={data:st.buffer,thumb,updated:Date.now(),rom:romLabel};
+  try{await idb.set(slotKey(i),rec);toast('スロット'+(i+1)+'に保存しました');}
+  catch(e){memSlots[i]=rec;toast(storageError(e)+'（このままページを閉じなければ、スロット'+(i+1)+'からロードはできます）',true);}
+  await refreshSlots();refreshStorage();}
+const memSlots={};
+async function quickLoad(i){if(!loaded)return;let m=memSlots[i]||slotMeta[i];if(!m){try{m=await idb.get(slotKey(i));}catch(_){}}
+  if(!m){toast('スロット'+(i+1)+'は空きです',true);return;}
+  if(!core.importState(new Uint8Array(m.data))){toast('この保存は読み込めませんでした（別のゲームの保存かもしれません）',true);return;}
+  curSlot=i;ls.set('remu-slot',i);nextT=0;blit();toast('スロット'+(i+1)+'の時点に戻りました');
+  if(!$('sheet').hidden&&settings.pauseMenu)closeSheet();}
+$('stateExport').onclick=async()=>{const m=slotMeta[curSlot]||memSlots[curSlot];if(!m){toast('選んだスロット'+(curSlot+1)+'は空きです',true);return;}
+  await offerFile(romLabel+'_slot'+(curSlot+1)+'.zip',zip([{name:'state.ss',data:new Uint8Array(m.data)},{name:'info.json',data:new TextEncoder().encode(JSON.stringify({game:gameKey,rom:m.rom,updated:m.updated}))}]));};
+$('stateImport').onclick=()=>$('stateFile').click();
+$('stateFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{let u=new Uint8Array(await f.arrayBuffer());if(isZip(u)){const fs=await unzip(u);const s=fs.find(x=>x.name==='state.ss')||fs.find(x=>!/\.json$/.test(x.name));if(!s)throw new Error('zipの中に保存データがありません');u=s.data;}
+    if(!core.importState(u))throw new Error('この保存は読み込めませんでした（別のゲームの保存かもしれません）');
+    const st=core.exportState();await idb.set(slotKey(curSlot),{data:st.buffer,thumb:(blit(),img.data.slice().buffer),updated:Date.now(),rom:romLabel});
+    await refreshSlots();toast('読み込んで、スロット'+(curSlot+1)+'にも入れました');}
+  catch(err){toast(err.message||storageError(err),true);}};
+async function refreshStorage(){try{const e=await navigator.storage.estimate();$('storageInfo').textContent='この端末で使っている容量：'+(e.usage/1048576).toFixed(1)+'MB'+(e.quota?' ／ 上限の目安 '+(e.quota/1048576).toFixed(0)+'MB':'');}catch(_){}}
+
+/* ---------------- controls & layout ---------------- */
+const CTLS=[
+ {id:'dpad',cls:'dpad',label:'十字キー'},
+ {id:'a',cls:'round a',label:'A',key:K.A},{id:'b',cls:'round b',label:'B',key:K.B},
+ {id:'l',cls:'shoulder',label:'L',key:K.L},{id:'r',cls:'shoulder',label:'R',key:K.R},
+ {id:'start',cls:'pill',label:'START',key:K.START},{id:'select',cls:'pill',label:'SELECT',key:K.SELECT},
+ {id:'fast',cls:'tool',label:'早送り',tool:'fast'},{id:'qsave',cls:'tool',label:'保存',tool:'qsave'},{id:'qload',cls:'tool',label:'ロード',tool:'qload'}];
+const DEFAULT_LAYOUT={
+ portrait:{dpad:{x:24,y:46},a:{x:85,y:38},b:{x:68,y:54},l:{x:13,y:9},r:{x:87,y:9},start:{x:58,y:86},select:{x:42,y:86},fast:{x:12,y:86},qsave:{x:76,y:86,s:.9},qload:{x:90,y:86,s:.9}},
+ landscape:{dpad:{x:11,y:58},a:{x:92,y:50},b:{x:83,y:66},l:{x:8,y:14},r:{x:92,y:14},start:{x:92,y:86,s:.9},select:{x:8,y:86,s:.9},fast:{x:8,y:32,s:.9},qsave:{x:92,y:30,s:.9},qload:{x:84,y:22,s:.85}}};
+let layouts=ls.get('remu-layouts',null)||JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+const orient=()=>matchMedia('(orientation:landscape) and (max-height:600px)').matches?'landscape':'portrait';
+const pad=$('pad'),els={};
+const DPAD_SVG='<svg viewBox="0 0 140 140" aria-hidden="true"><path class="cross" d="M48 6h44a6 6 0 0 1 6 6v36h36a6 6 0 0 1 6 6v32a6 6 0 0 1-6 6H98v36a6 6 0 0 1-6 6H48a6 6 0 0 1-6-6V92H6a6 6 0 0 1-6-6V54a6 6 0 0 1 6-6h36V12a6 6 0 0 1 6-6z"/>'+
+ '<rect class="hl u" x="42" y="6" width="56" height="42" rx="6"/><rect class="hl d" x="42" y="92" width="56" height="42" rx="6"/><rect class="hl l" x="0" y="48" width="42" height="44" rx="6"/><rect class="hl r" x="98" y="48" width="42" height="44" rx="6"/>'+
+ '<path class="arrow" d="M70 18l11 14H59zM70 122l11-14H59zM18 70l14-11v22zM122 70l-14-11v22z"/></svg>';
+for(const c of CTLS){const e=document.createElement('div');e.className='ctl '+c.cls;e.dataset.id=c.id;e.setAttribute('role','button');e.setAttribute('aria-label',c.label);
+  if(c.id==='dpad')e.innerHTML=DPAD_SVG;else e.textContent=c.label;pad.append(e);els[c.id]=e;}
+function applyLayout(){const L=layouts[orient()];for(const c of CTLS){const p=L[c.id]||DEFAULT_LAYOUT[orient()][c.id];const e=els[c.id];
+  e.style.left=p.x+'%';e.style.top=p.y+'%';e.style.setProperty('--s',p.s||1);
+  const hide=!!p.hide;e.classList.toggle('off',hide);e.hidden=hide&&!editing;}
+  $('layoutOrient').textContent=orient()==='landscape'?'横持ち':'縦持ち';}
+addEventListener('resize',()=>applyLayout());
+function saveLayouts(){ls.set('remu-layouts',layouts);}
+
+/* touch play */
+const ptr=new Map();/* pointerId -> {id, keys} */
+function dpadKeys(e,el){const r=el.getBoundingClientRect();const dx=(e.clientX-(r.left+r.width/2))/(r.width/2),dy=(e.clientY-(r.top+r.height/2))/(r.height/2);
+  if(Math.hypot(dx,dy)<0.18)return 0;const a=Math.atan2(dy,dx)*180/Math.PI;let k=0;
+  if(a>-67.5&&a<67.5)k|=K.RIGHT;if(a>112.5||a<-112.5)k|=K.LEFT;if(a>22.5&&a<157.5)k|=K.DOWN;if(a<-22.5&&a>-157.5)k|=K.UP;return k;}
+function recompute(){let k=0;for(const p of ptr.values())k|=p.keys;touchKeys=k;
+  const d=[];if(touchKeys&K.UP)d.push('u');if(touchKeys&K.DOWN)d.push('d');if(touchKeys&K.LEFT)d.push('l');if(touchKeys&K.RIGHT)d.push('r');els.dpad.dataset.dir=d.join(' ');
+  for(const c of CTLS)if(c.key)els[c.id].classList.toggle('on',!!(touchKeys&c.key));}
+function buzz(){if(settings.haptic&&navigator.vibrate)try{navigator.vibrate(8);}catch(_){}}
+pad.addEventListener('pointerdown',e=>{const el=e.target.closest('.ctl');if(!el)return;e.preventDefault();audioResume();
+  if(editing){startDrag(e,el);return;}
+  const c=CTLS.find(c=>c.id===el.dataset.id);
+  if(c.tool){el.classList.add('on');setTimeout(()=>el.classList.remove('on'),120);buzz();
+    if(c.tool==='fast'){fastToggle=!fastToggle;el.textContent=fastToggle?'×'+settings.fast:'早送り';}
+    else if(c.tool==='qsave')quickSave(curSlot);else if(c.tool==='qload')quickLoad(curSlot);return;}
+  try{pad.setPointerCapture(e.pointerId);}catch(_){}
+  ptr.set(e.pointerId,{id:c.id,keys:c.id==='dpad'?dpadKeys(e,el):c.key});buzz();recompute();});
+pad.addEventListener('pointermove',e=>{if(editing){moveDrag(e);return;}const p=ptr.get(e.pointerId);if(!p)return;
+  if(p.id==='dpad'){const k=dpadKeys(e,els.dpad);if(k!==p.keys){p.keys=k;recompute();}}});
+function endPtr(e){if(editing){endDrag(e);return;}if(ptr.delete(e.pointerId))recompute();}
+pad.addEventListener('pointerup',endPtr);pad.addEventListener('pointercancel',endPtr);pad.addEventListener('lostpointercapture',endPtr);
+pad.addEventListener('contextmenu',e=>e.preventDefault());
+
+/* layout editing */
+let editing=false,sel=null,drag=null;
+function startEdit(){closeSheet();editing=true;pad.classList.add('editing');$('editBar').hidden=false;$('allOpacity').value=currentSkin().opacity;selectCtl(null);applyLayout();updateRunning();}
+function endEdit(){editing=false;pad.classList.remove('editing');$('editBar').hidden=true;for(const e of Object.values(els))e.classList.remove('sel');saveLayouts();applyLayout();updateRunning();toast('ボタン配置を保存しました');}
+function selectCtl(id){sel=id;for(const [k,e] of Object.entries(els))e.classList.toggle('sel',k===id);const c=CTLS.find(c=>c.id===id);
+  $('selName').textContent=c?c.label:'ボタンを選ぶ';$('selSize').disabled=$('selHide').disabled=!c;
+  if(c){const p=layouts[orient()][id];$('selSize').value=p.s||1;$('selHide').textContent=p.hide?'表示する':'隠す';}}
+function startDrag(e,el){const id=el.dataset.id;selectCtl(id);const r=pad.getBoundingClientRect();const p=layouts[orient()][id];
+  drag={pid:e.pointerId,id,ox:e.clientX,oy:e.clientY,px:p.x,py:p.y,w:r.width,h:r.height};try{pad.setPointerCapture(e.pointerId);}catch(_){}}
+function moveDrag(e){if(!drag||e.pointerId!==drag.pid)return;const p=layouts[orient()][drag.id];
+  const snap=v=>Math.round(v*2)/2;p.x=Math.min(98,Math.max(2,snap(drag.px+(e.clientX-drag.ox)/drag.w*100)));p.y=Math.min(98,Math.max(2,snap(drag.py+(e.clientY-drag.oy)/drag.h*100)));applyLayout();}
+function endDrag(e){if(drag&&e.pointerId===drag.pid)drag=null;}
+$('selSize').oninput=e=>{if(!sel)return;layouts[orient()][sel].s=+e.target.value;applyLayout();};
+$('selHide').onclick=()=>{if(!sel)return;const p=layouts[orient()][sel];p.hide=!p.hide;$('selHide').textContent=p.hide?'表示する':'隠す';applyLayout();};
+$('allOpacity').oninput=e=>{const s=currentSkin();s.opacity=+e.target.value;if(s.custom)persistSkins();else{ls.set('remu-op:'+s.id,s.opacity);}applySkin();};
+$('layoutReset').onclick=()=>{layouts[orient()]=JSON.parse(JSON.stringify(DEFAULT_LAYOUT[orient()]));selectCtl(null);applyLayout();toast((orient()==='landscape'?'横持ち':'縦持ち')+'の配置を初期に戻しました');};
+$('layoutDone').onclick=endEdit;$('layoutEdit').onclick=startEdit;
+pad.addEventListener('pointerdown',e=>{if(editing&&!e.target.closest('.ctl'))selectCtl(null);});
+
+/* ---------------- skins ---------------- */
+const BUILTIN=[
+ {id:'rem',name:'レム',bg:'#cfe0ff',frame:'#2c3d7a',btn:'#ffffff',a:'#5b86e5',b:'#8fb0f2',dpad:'#2c3d7a',fg:'#1c2550',shape:'18px',opacity:1,pattern:'apron'},
+ {id:'ram',name:'ラム',bg:'#ffd9e6',frame:'#6b2d4a',btn:'#ffffff',a:'#e9739c',b:'#f3a6c0',dpad:'#6b2d4a',fg:'#4a1a30',shape:'18px',opacity:1,pattern:'apron'},
+ {id:'bea',name:'ベアトリス',bg:'#fbe7b0',frame:'#7a1f3d',btn:'#c8325f',a:'#c8325f',b:'#e7a83a',dpad:'#5a1630',fg:'#fff4d6',shape:'18px',opacity:1,pattern:'drill'},
+ {id:'classic',name:'クラシック',bg:'#5b4fa8',frame:'#2b2550',btn:'#3a336d',a:'#3a336d',b:'#3a336d',dpad:'#26214a',fg:'#d8d4ff',shape:'6px',opacity:1,pattern:'none'},
+ {id:'night',name:'ナイト',bg:'#0f1118',frame:'#000000',btn:'#2a2f40',a:'#2a2f40',b:'#2a2f40',dpad:'#2a2f40',fg:'#cfd5ef',shape:'18px',opacity:.85,pattern:'none'},
+ {id:'clear',name:'クリア',bg:'#000000',frame:'#000000',btn:'#ffffff',a:'#ffffff',b:'#ffffff',dpad:'#ffffff',fg:'#111111',shape:'18px',opacity:.35,pattern:'none'}];
+const PATTERNS={
+ none:()=>'none',
+ apron:(s)=>`radial-gradient(circle at 20% 15%,rgba(255,255,255,.55) 0 2px,transparent 3px) 0 0/28px 28px,linear-gradient(180deg,rgba(255,255,255,.35),rgba(255,255,255,0) 40%)`,
+ drill:(s)=>`repeating-linear-gradient(135deg,rgba(255,255,255,.22) 0 10px,rgba(255,255,255,0) 10px 22px)`};
+let customSkins=ls.get('remu-skins',[]);let skinId=ls.get('remu-skin','rem');const skinImgCache={};
+const allSkins=()=>[...BUILTIN.map(s=>Object.assign({},s,{opacity:ls.get('remu-op:'+s.id,s.opacity)})),...customSkins];
+function currentSkin(){return allSkins().find(s=>s.id===skinId)||allSkins()[0];}
+function persistSkins(){ls.set('remu-skins',customSkins);}
+async function skinImageURL(s){if(!s.img)return null;if(skinImgCache[s.id])return skinImgCache[s.id];try{const b=await idb.get('skinimg:'+s.id);if(b){return skinImgCache[s.id]=URL.createObjectURL(new Blob([b]));}}catch(_){}return null;}
+async function applySkin(){const s=currentSkin();const st=$('stage').style;
+  st.setProperty('--sk-bg',s.bg);st.setProperty('--sk-frame',s.frame);st.setProperty('--sk-btn',s.btn);st.setProperty('--sk-a',s.a);st.setProperty('--sk-b',s.b);
+  st.setProperty('--sk-dpad',s.dpad);st.setProperty('--sk-btn-fg',s.fg);st.setProperty('--sk-shape',s.shape);st.setProperty('--sk-opacity',s.opacity);
+  const url=await skinImageURL(s);st.setProperty('--sk-img',url?`url("${url}")`:(PATTERNS[s.pattern]||PATTERNS.none)(s));
+  if(!editing)$('allOpacity').value=s.opacity;}
+async function renderSkins(){const box=$('skinList');box.textContent='';
+  for(const s of allSkins()){const b=document.createElement('button');b.className='skin'+(s.id===skinId?' cur':'');b.type='button';
+    const pv=document.createElement('div');pv.className='pv';pv.style.backgroundColor=s.bg;const url=await skinImageURL(s);pv.style.backgroundImage=url?`url("${url}")`:(PATTERNS[s.pattern]||PATTERNS.none)(s);pv.style.backgroundSize='cover';
+    pv.innerHTML=`<b style="background:${s.frame}"></b><i style="left:14px;background:${s.dpad}"></i><i style="right:30px;background:${s.b}"></i><i style="right:10px;background:${s.a}"></i>`;
+    const nm=document.createElement('span');nm.textContent=s.name+(s.custom?'（自作）':'');b.append(pv,nm);
+    b.onclick=()=>{skinId=s.id;ls.set('remu-skin',skinId);applySkin();renderSkins();};box.append(b);}
+  openSkinEditor();}
+const SK_FIELDS={skBg:'bg',skFrame:'frame',skBtn:'btn',skA:'a',skB:'b',skDpad:'dpad',skFg:'fg',skShape:'shape',skOpacity:'opacity'};
+function openSkinEditor(){const s=currentSkin();const ed=$('skinEditor');ed.hidden=!s.custom;if(!s.custom)return;
+  $('skName').value=s.name;for(const [id,k] of Object.entries(SK_FIELDS))$(id).value=s[k];}
+for(const [id,k] of Object.entries(SK_FIELDS))$(id).addEventListener('input',e=>{const s=customSkins.find(x=>x.id===skinId);if(!s)return;s[k]=k==='opacity'?+e.target.value:e.target.value;persistSkins();applySkin();});
+$('skName').addEventListener('change',e=>{const s=customSkins.find(x=>x.id===skinId);if(!s)return;s.name=e.target.value.trim()||'マイスキン';persistSkins();renderSkins();});
+$('skinNew').onclick=async()=>{const base=currentSkin();const id='c'+Date.now().toString(36);const s=Object.assign({},base,{id,name:base.name+'のアレンジ',custom:true,img:false});
+  if(base.img){try{const b=await idb.get('skinimg:'+base.id);if(b){await idb.set('skinimg:'+id,b);s.img=true;}}catch(_){}}
+  customSkins.push(s);persistSkins();skinId=id;ls.set('remu-skin',id);await applySkin();await renderSkins();toast('新しいスキンを作りました。下で色や背景を変えられます');};
+$('skImgPick').onclick=()=>$('skinImg').click();
+$('skinImg').onchange=async e=>{const f=e.target.files[0];e.target.value='';const s=customSkins.find(x=>x.id===skinId);if(!f||!s)return;
+  try{const bmp=await createImageBitmap(f);const sc=Math.min(1,1600/Math.max(bmp.width,bmp.height));const c=document.createElement('canvas');c.width=Math.round(bmp.width*sc);c.height=Math.round(bmp.height*sc);
+    c.getContext('2d').drawImage(bmp,0,0,c.width,c.height);const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.88));const buf=await blob.arrayBuffer();
+    await idb.set('skinimg:'+s.id,buf);delete skinImgCache[s.id];s.img=true;persistSkins();await applySkin();await renderSkins();toast('背景の画像を設定しました');}
+  catch(err){toast(err&&err.name?storageError(err):'画像を読み込めませんでした',true);}};
+$('skImgClear').onclick=async()=>{const s=customSkins.find(x=>x.id===skinId);if(!s)return;s.img=false;delete skinImgCache[s.id];try{await idb.del('skinimg:'+s.id);}catch(_){}persistSkins();applySkin();renderSkins();};
+$('skDelete').onclick=async()=>{const i=customSkins.findIndex(x=>x.id===skinId);if(i<0)return;
+  if($('skDelete').dataset.armed!=='1'){$('skDelete').dataset.armed='1';$('skDelete').textContent='もう一度押すと削除します';setTimeout(()=>{$('skDelete').dataset.armed='';$('skDelete').textContent='このスキンを削除';},3000);return;}
+  $('skDelete').dataset.armed='';$('skDelete').textContent='このスキンを削除';try{await idb.del('skinimg:'+skinId);}catch(_){}customSkins.splice(i,1);persistSkins();skinId='rem';ls.set('remu-skin',skinId);applySkin();renderSkins();toast('スキンを削除しました');};
+$('skExport').onclick=async()=>{const s=customSkins.find(x=>x.id===skinId);if(!s)return;const out=Object.assign({},s);delete out.id;out.format='remu-skin-1';
+  if(s.img){try{const b=await idb.get('skinimg:'+s.id);if(b){let bin='';const u=new Uint8Array(b);for(let i=0;i<u.length;i+=32768)bin+=String.fromCharCode.apply(null,u.subarray(i,i+32768));out.image='data:image/jpeg;base64,'+btoa(bin);}}catch(_){}}
+  await offerFile((s.name||'skin')+'.json',JSON.stringify(out));};
+$('skinImport').onclick=()=>$('skinFile').click();
+$('skinFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  try{const o=JSON.parse(await f.text());if(o.format!=='remu-skin-1')throw new Error('レムプレイヤーのスキンではないようです');
+    const id='c'+Date.now().toString(36);const s={id,custom:true,name:String(o.name||'読み込んだスキン').slice(0,20),img:false};
+    for(const k of Object.values(SK_FIELDS))s[k]=o[k]!==undefined?o[k]:currentSkin()[k];s.pattern=o.pattern||'none';
+    if(o.image&&/^data:image\//.test(o.image)){const b=await (await fetch(o.image)).arrayBuffer();await idb.set('skinimg:'+id,b);s.img=true;}
+    customSkins.push(s);persistSkins();skinId=id;ls.set('remu-skin',id);await applySkin();await renderSkins();toast('スキンを読み込みました');}
+  catch(err){toast(err.message||'読み込めませんでした',true);}};
+
+/* ---------------- sheet ---------------- */
+function openSheet(tab){$('sheet').hidden=false;$('scrim').hidden=false;if(tab)showTab(tab);updateRunning();refreshStorage();refreshSlots();renderSkins();}
+function closeSheet(){$('sheet').hidden=true;$('scrim').hidden=true;updateRunning();}
+function showTab(t){for(const b of document.querySelectorAll('.tabs button'))b.setAttribute('aria-pressed',String(b.dataset.tab===t));
+  for(const p of document.querySelectorAll('.panel'))p.hidden=p.dataset.panel!==t;ls.set('remu-tab',t);}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
+$('btnMenu').onclick=()=>openSheet();$('btnClose').onclick=closeSheet;$('scrim').onclick=closeSheet;
+$('btnPause').onclick=()=>{userPaused=!userPaused;updateRunning();if(!userPaused)audioResume();};
+$('btnReset').onclick=()=>{if(!loaded)return;const b=$('btnReset');if(b.dataset.armed!=='1'){b.dataset.armed='1';b.textContent='もう一度押すとリセット';setTimeout(()=>{b.dataset.armed='';b.textContent='ゲームをリセット';},3000);return;}
+  b.dataset.armed='';b.textContent='ゲームをリセット';flushSave().then(()=>{core.reset();toast('リセットしました');closeSheet();});};
+showTab(ls.get('remu-tab','quick'));
+
+/* options */
+$('optVolume').value=settings.volume;$('optVolume').oninput=e=>{settings.volume=+e.target.value;if(gain)gain.gain.value=settings.volume;saveSettings();};
+$('optSpeed').value=String(settings.fast);$('optSpeed').onchange=e=>{settings.fast=+e.target.value;saveSettings();if(fastToggle)els.fast.textContent='×'+settings.fast;};
+$('optPauseMenu').checked=settings.pauseMenu;$('optPauseMenu').onchange=e=>{settings.pauseMenu=e.target.checked;saveSettings();updateRunning();};
+$('optHaptic').checked=settings.haptic;$('optHaptic').onchange=e=>{settings.haptic=e.target.checked;saveSettings();};
+$('optRememberRom').checked=settings.rememberRom;$('optRememberRom').onchange=async e=>{settings.rememberRom=e.target.checked;saveSettings();if(!settings.rememberRom){try{await idb.del('rom:last');}catch(_){}refreshStorage();}};
+$('forgetRom').onclick=async()=>{try{await idb.del('rom:last');toast('覚えていたROMを消しました（セーブは残っています）');}catch(e){toast(storageError(e),true);}refreshStorage();};
+
+/* ---------------- boot ---------------- */
+applySkin();applyLayout();refreshSlots();
+(async()=>{try{await getWasm();}catch(e){toast(e.message,true);return;}
+  if(settings.rememberRom){try{const r=await idb.get('rom:last');if(r&&r.data){$('welcome').querySelector('p').textContent='前回のROM「'+r.name+'」を覚えています。';
+    const b=document.createElement('button');b.className='chip';b.textContent='続きから遊ぶ';b.onclick=async()=>{audioResume();try{await loadRom(new Uint8Array(r.data),r.name,true);}catch(err){toast(err.message,true);}};$('btnOpen2').before(b);}}catch(_){}}})();
+try{navigator.wakeLock&&document.addEventListener('pointerdown',()=>{if(loaded&&!window.__wl)navigator.wakeLock.request('screen').then(l=>{window.__wl=l;l.addEventListener('release',()=>window.__wl=null);}).catch(()=>{});});}catch(_){}
+window.__remu={get core(){return core;},quickSave,quickLoad,loadRom,flushSave,openSheet,startEdit,endEdit,get layouts(){return layouts;}};
+})();
+</script>
+</body></html>
