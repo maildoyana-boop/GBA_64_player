@@ -44,30 +44,22 @@ button{cursor:pointer}
 .chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
 
 /* ---------- stage (wears the skin) ---------- */
-#stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;
-  background-color:var(--sk-bg);background-image:var(--sk-img,none);background-size:cover;background-position:center;
-  padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
-#screenWrap{position:relative;flex:none;display:flex;justify-content:center;align-items:center;padding:10px}
-#lcd{position:relative;background:var(--sk-frame);border-radius:var(--sk-frame-r,14px);padding:var(--sk-frame-pad,10px);
-  box-shadow:0 6px 18px rgba(0,0,0,.25);max-width:100%}
+#stage{position:relative;flex:1;min-height:0;overflow:hidden;
+  background-color:var(--sk-bg);background-image:var(--sk-img,none);background-size:cover;background-position:center}
+/* the screen and every control are placed by script, in % of the stage, so each can be moved and resized */
+#screenWrap{position:absolute;inset:0;pointer-events:none}
+#lcd{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);box-sizing:border-box;width:300px;pointer-events:auto;
+  background:var(--sk-frame);border-radius:var(--sk-frame-r,14px);padding:var(--sk-frame-pad,10px);box-shadow:0 6px 18px rgba(0,0,0,.25);touch-action:none}
 #screen{display:block;width:100%;height:auto;image-rendering:pixelated;image-rendering:crisp-edges;background:#000;border-radius:3px;aspect-ratio:3/2}
 #welcome{position:absolute;inset:var(--sk-frame-pad,10px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
   background:#0b0d16;color:#e9ecff;border-radius:3px;text-align:center;padding:12px}
 #welcome strong{font-family:var(--font-dot);font-size:clamp(18px,5vw,28px);letter-spacing:.06em}
 #welcome p{margin:0;font-size:12px;color:#aab1d6;max-width:30ch}
 #welcome .chip{background:#e9ecff;color:#151a35;border-color:#e9ecff}
-#pad{position:relative;flex:1;min-height:0;touch-action:none}
+#pad{position:absolute;inset:0;touch-action:none;pointer-events:none;
+  left:env(safe-area-inset-left,0px);right:env(safe-area-inset-right,0px)}
+#pad .ctl{pointer-events:auto}
 @media (max-width:480px){.brand{display:none}}
-#lcd{box-sizing:border-box}
-
-/* landscape: the screen sits in the middle and the controls float over the whole stage */
-@media (orientation:landscape) and (max-height:600px){
-  #stage{display:block}
-  #screenWrap{position:absolute;inset:0;padding:6px}
-  #lcd{height:calc(100% - 4px);aspect-ratio:auto;display:flex;align-items:center}
-  #screen{height:100%;width:auto}
-  #pad{position:absolute;inset:0}
-}
 
 .ctl{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(var(--s,1));touch-action:none;
   display:flex;align-items:center;justify-content:center;opacity:var(--sk-opacity,1);
@@ -88,6 +80,8 @@ button{cursor:pointer}
 .ctl[hidden]{display:none}
 
 /* edit mode */
+#stage.editing #lcd{outline:2px dashed rgba(255,255,255,.75);outline-offset:4px}
+#stage.editing #lcd.sel{outline-color:#ffd34d;outline-style:solid}
 #pad.editing .ctl{outline:2px dashed rgba(255,255,255,.75);outline-offset:4px;opacity:1}
 #pad.editing .ctl.sel{outline-color:#ffd34d;outline-style:solid}
 #pad.editing .ctl.off{opacity:.3}
@@ -172,9 +166,9 @@ table.keys td{padding:3px 10px 3px 0}
     </div>
     <div id="pad" aria-label="コントローラー"></div>
   </main>
-  <input type="file" id="romFile" accept=".gba,.zip,.agb,.bin" hidden>
-  <input type="file" id="saveFile" accept=".sav,.zip,.srm,.bin" hidden>
-  <input type="file" id="stateFile" accept=".zip,.state,.ss0,.ss1" hidden>
+  <input type="file" id="romFile" hidden>
+  <input type="file" id="saveFile" hidden>
+  <input type="file" id="stateFile" hidden>
   <input type="file" id="skinFile" accept=".json" hidden>
   <input type="file" id="skinImg" accept="image/*" hidden>
 </div>
@@ -242,8 +236,8 @@ table.keys td{padding:3px 10px 3px 0}
   </div>
 
   <div class="panel" data-panel="layout" hidden>
-    <p class="note">ボタンを指で動かして、好きな場所と大きさにできます。縦持ちと横持ちで別々に覚えます。</p>
-    <div class="btnrow"><button class="btn primary" id="layoutEdit">ボタン配置を編集する</button></div>
+    <p class="note">ボタンとゲーム画面を指で動かして、好きな場所と大きさにできます。縦持ちと横持ちで別々に覚えます。</p>
+    <div class="btnrow"><button class="btn primary" id="layoutEdit">ボタンと画面の配置を編集する</button></div>
     <p class="note">いま編集されるのは <b id="layoutOrient">縦持ち</b> の配置です。横持ちを変えたいときは、端末を横にしてから編集してください。</p>
   </div>
 
@@ -272,7 +266,7 @@ table.keys td{padding:3px 10px 3px 0}
 </section>
 
 <div id="editBar" hidden>
-  <div class="row"><span class="selname" id="selName">ボタンを選ぶ</span>
+  <div class="row"><span class="selname" id="selName">ボタンか画面を選ぶ</span>
     <label>大きさ<input type="range" id="selSize" min="0.5" max="2" step="0.05" disabled></label>
     <button class="btn" id="selHide" disabled>隠す</button></div>
   <div class="row"><label>ボタン全体の濃さ<input type="range" id="allOpacity" min="0.15" max="1" step="0.05"></label>
@@ -482,11 +476,11 @@ const CTLS=[
  {id:'start',cls:'pill',label:'START',key:K.START},{id:'select',cls:'pill',label:'SELECT',key:K.SELECT},
  {id:'fast',cls:'tool',label:'早送り',tool:'fast'},{id:'qsave',cls:'tool',label:'保存',tool:'qsave'},{id:'qload',cls:'tool',label:'ロード',tool:'qload'}];
 const DEFAULT_LAYOUT={
- portrait:{dpad:{x:24,y:46},a:{x:85,y:38},b:{x:68,y:54},l:{x:13,y:9},r:{x:87,y:9},start:{x:58,y:86},select:{x:42,y:86},fast:{x:12,y:86},qsave:{x:76,y:86,s:.9},qload:{x:90,y:86,s:.9}},
+ portrait:{dpad:{x:24,y:68},a:{x:85,y:63},b:{x:68,y:72.5},l:{x:13,y:45.5},r:{x:87,y:45.5},start:{x:58,y:92},select:{x:42,y:92},fast:{x:12,y:92},qsave:{x:76,y:92,s:.9},qload:{x:90,y:92,s:.9}},
  landscape:{dpad:{x:11,y:58},a:{x:92,y:50},b:{x:83,y:66},l:{x:8,y:14},r:{x:92,y:14},start:{x:92,y:86,s:.9},select:{x:8,y:86,s:.9},fast:{x:8,y:32,s:.9},qsave:{x:92,y:30,s:.9},qload:{x:84,y:22,s:.85}}};
-let layouts=ls.get('remu-layouts',null)||JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
+let layouts=ls.get('remu-layouts2',null)||JSON.parse(JSON.stringify(DEFAULT_LAYOUT));
 const orient=()=>matchMedia('(orientation:landscape) and (max-height:600px)').matches?'landscape':'portrait';
-const pad=$('pad'),els={};
+const pad=$('pad'),stage=$('stage'),lcd=$('lcd'),els={};
 const DPAD_SVG='<svg viewBox="0 0 140 140" aria-hidden="true"><path class="cross" d="M48 6h44a6 6 0 0 1 6 6v36h36a6 6 0 0 1 6 6v32a6 6 0 0 1-6 6H98v36a6 6 0 0 1-6 6H48a6 6 0 0 1-6-6V92H6a6 6 0 0 1-6-6V54a6 6 0 0 1 6-6h36V12a6 6 0 0 1 6-6z"/>'+
  '<rect class="hl u" x="42" y="6" width="56" height="42" rx="6"/><rect class="hl d" x="42" y="92" width="56" height="42" rx="6"/><rect class="hl l" x="0" y="48" width="42" height="44" rx="6"/><rect class="hl r" x="98" y="48" width="42" height="44" rx="6"/>'+
  '<path class="arrow" d="M70 18l11 14H59zM70 122l11-14H59zM18 70l14-11v22zM122 70l-14-11v22z"/></svg>';
@@ -495,9 +489,16 @@ for(const c of CTLS){const e=document.createElement('div');e.className='ctl '+c.
 function applyLayout(){const L=layouts[orient()];for(const c of CTLS){const p=L[c.id]||DEFAULT_LAYOUT[orient()][c.id];const e=els[c.id];
   e.style.left=p.x+'%';e.style.top=p.y+'%';e.style.setProperty('--s',p.s||1);
   const hide=!!p.hide;e.classList.toggle('off',hide);e.hidden=hide&&!editing;}
-  $('layoutOrient').textContent=orient()==='landscape'?'横持ち':'縦持ち';}
-addEventListener('resize',()=>applyLayout());
-function saveLayouts(){ls.set('remu-layouts',layouts);}
+  placeScreen();$('layoutOrient').textContent=orient()==='landscape'?'横持ち':'縦持ち';}
+/* default screen: portrait = full width at the top; landscape = full height in the middle */
+function screenDefault(){const W=stage.clientWidth,H=stage.clientHeight;if(!W||!H)return{x:50,y:30,w:300};
+  const hOf=w=>(w-20)*2/3+20;let w;
+  if(orient()==='landscape'){w=Math.min((H-12-20)*1.5+20,W*0.64);return{x:50,y:50,w};}
+  w=Math.min(W-20,(H*0.42-20)*1.5+20);return{x:50,y:(10+hOf(w)/2)/H*100,w};}
+function placeScreen(){const d=screenDefault();const p=layouts[orient()].screen;
+  const x=p?p.x:d.x,y=p?p.y:d.y,w=d.w*(p&&p.s||1);lcd.style.left=x+'%';lcd.style.top=y+'%';lcd.style.width=w+'px';}
+addEventListener('resize',()=>applyLayout());els.screen=lcd;
+function saveLayouts(){ls.set('remu-layouts2',layouts);}
 
 /* touch play */
 const ptr=new Map();/* pointerId -> {id, keys} */
@@ -514,7 +515,7 @@ pad.addEventListener('pointerdown',e=>{const el=e.target.closest('.ctl');if(!el)
   if(c.tool){el.classList.add('on');setTimeout(()=>el.classList.remove('on'),120);buzz();
     if(c.tool==='fast'){fastToggle=!fastToggle;el.textContent=fastToggle?'×'+settings.fast:'早送り';}
     else if(c.tool==='qsave')quickSave(curSlot);else if(c.tool==='qload')quickLoad(curSlot);return;}
-  try{pad.setPointerCapture(e.pointerId);}catch(_){}
+  try{el.setPointerCapture(e.pointerId);}catch(_){}
   ptr.set(e.pointerId,{id:c.id,keys:c.id==='dpad'?dpadKeys(e,el):c.key});buzz();recompute();});
 pad.addEventListener('pointermove',e=>{if(editing){moveDrag(e);return;}const p=ptr.get(e.pointerId);if(!p)return;
   if(p.id==='dpad'){const k=dpadKeys(e,els.dpad);if(k!==p.keys){p.keys=k;recompute();}}});
@@ -524,13 +525,14 @@ pad.addEventListener('contextmenu',e=>e.preventDefault());
 
 /* layout editing */
 let editing=false,sel=null,drag=null;
-function startEdit(){closeSheet();editing=true;pad.classList.add('editing');$('editBar').hidden=false;$('allOpacity').value=currentSkin().opacity;selectCtl(null);applyLayout();updateRunning();}
-function endEdit(){editing=false;pad.classList.remove('editing');$('editBar').hidden=true;for(const e of Object.values(els))e.classList.remove('sel');saveLayouts();applyLayout();updateRunning();toast('ボタン配置を保存しました');}
-function selectCtl(id){sel=id;for(const [k,e] of Object.entries(els))e.classList.toggle('sel',k===id);const c=CTLS.find(c=>c.id===id);
-  $('selName').textContent=c?c.label:'ボタンを選ぶ';$('selSize').disabled=$('selHide').disabled=!c;
-  if(c){const p=layouts[orient()][id];$('selSize').value=p.s||1;$('selHide').textContent=p.hide?'表示する':'隠す';}}
-function startDrag(e,el){const id=el.dataset.id;selectCtl(id);const r=pad.getBoundingClientRect();const p=layouts[orient()][id];
-  drag={pid:e.pointerId,id,ox:e.clientX,oy:e.clientY,px:p.x,py:p.y,w:r.width,h:r.height};try{pad.setPointerCapture(e.pointerId);}catch(_){}}
+function startEdit(){closeSheet();editing=true;pad.classList.add('editing');stage.classList.add('editing');$('editBar').hidden=false;$('allOpacity').value=currentSkin().opacity;selectCtl(null);applyLayout();updateRunning();}
+function endEdit(){editing=false;pad.classList.remove('editing');stage.classList.remove('editing');$('editBar').hidden=true;for(const e of Object.values(els))e.classList.remove('sel');saveLayouts();applyLayout();updateRunning();toast('ボタンと画面の配置を保存しました');}
+function screenSpec(){const L=layouts[orient()];if(!L.screen){const d=screenDefault();L.screen={x:Math.round(d.x*2)/2,y:Math.round(d.y*2)/2,s:1};}return L.screen;}
+function selectCtl(id){sel=id;for(const [k,e] of Object.entries(els))e.classList.toggle('sel',k===id);const c=id==='screen'?{label:'ゲーム画面'}:CTLS.find(c=>c.id===id);
+  $('selName').textContent=c?c.label:'ボタンか画面を選ぶ';$('selSize').disabled=!c;$('selHide').disabled=!c||id==='screen';
+  if(c){const p=id==='screen'?screenSpec():layouts[orient()][id];$('selSize').value=p.s||1;$('selHide').textContent=p.hide?'表示する':'隠す';}}
+function startDrag(e,el){const id=el===lcd?'screen':el.dataset.id;selectCtl(id);const r=(id==='screen'?stage:pad).getBoundingClientRect();const p=id==='screen'?screenSpec():layouts[orient()][id];
+  drag={pid:e.pointerId,id,ox:e.clientX,oy:e.clientY,px:p.x,py:p.y,w:r.width,h:r.height};try{el.setPointerCapture(e.pointerId);}catch(_){}}
 function moveDrag(e){if(!drag||e.pointerId!==drag.pid)return;const p=layouts[orient()][drag.id];
   const snap=v=>Math.round(v*2)/2;p.x=Math.min(98,Math.max(2,snap(drag.px+(e.clientX-drag.ox)/drag.w*100)));p.y=Math.min(98,Math.max(2,snap(drag.py+(e.clientY-drag.oy)/drag.h*100)));applyLayout();}
 function endDrag(e){if(drag&&e.pointerId===drag.pid)drag=null;}
@@ -539,7 +541,10 @@ $('selHide').onclick=()=>{if(!sel)return;const p=layouts[orient()][sel];p.hide=!
 $('allOpacity').oninput=e=>{const s=currentSkin();s.opacity=+e.target.value;if(s.custom)persistSkins();else{ls.set('remu-op:'+s.id,s.opacity);}applySkin();};
 $('layoutReset').onclick=()=>{layouts[orient()]=JSON.parse(JSON.stringify(DEFAULT_LAYOUT[orient()]));selectCtl(null);applyLayout();toast((orient()==='landscape'?'横持ち':'縦持ち')+'の配置を初期に戻しました');};
 $('layoutDone').onclick=endEdit;$('layoutEdit').onclick=startEdit;
-pad.addEventListener('pointerdown',e=>{if(editing&&!e.target.closest('.ctl'))selectCtl(null);});
+stage.addEventListener('pointerdown',e=>{if(editing&&!e.target.closest('.ctl,#lcd'))selectCtl(null);});
+lcd.addEventListener('pointerdown',e=>{if(!editing)return;e.preventDefault();startDrag(e,lcd);});
+lcd.addEventListener('pointermove',e=>{if(editing)moveDrag(e);});
+lcd.addEventListener('pointerup',e=>{if(editing)endDrag(e);});lcd.addEventListener('pointercancel',e=>{if(editing)endDrag(e);});
 
 /* ---------------- skins ---------------- */
 const BUILTIN=[
