@@ -26,7 +26,7 @@
 :root[data-theme="dark"]{
   --bg:#12131c; --surface:#1b1d2a; --surface-2:#232637; --line:#33374d; --fg:#e8eaf6; --muted:#a3a8c4;
   --accent:#8ea8ff; --accent-fg:#10142a; --danger:#ff7d93; --ok:#6ad3a6; color-scheme:dark}
-html,body{height:100%}
+html,body{height:100%;touch-action:manipulation}
 body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);overflow:hidden;
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
 button,input,select{font:inherit;color:inherit}
@@ -631,6 +631,13 @@ applySkin();applyLayout();refreshSlots();
   if(settings.rememberRom){try{const r=await idb.get('rom:last');if(r&&r.data){$('welcome').querySelector('p').textContent='前回のROM「'+r.name+'」を覚えています。';
     const b=document.createElement('button');b.className='chip';b.textContent='続きから遊ぶ';b.onclick=async()=>{audioResume();try{await loadRom(new Uint8Array(r.data),r.name,true);}catch(err){toast(err.message,true);}};$('btnOpen2').before(b);}}catch(_){}}})();
 try{navigator.wakeLock&&document.addEventListener('pointerdown',()=>{if(loaded&&!window.__wl)navigator.wakeLock.request('screen').then(l=>{window.__wl=l;l.addEventListener('release',()=>window.__wl=null);}).catch(()=>{});});}catch(_){}
+/* iOS Safari ignores user-scalable=no: stop double-tap zoom and pinch zoom ourselves */
+(()=>{let lastTouch=0;const inPanel=t=>t.closest&&t.closest('.panel input,.panel select,.panel textarea,#editBar input');
+  document.addEventListener('touchend',e=>{const now=Date.now();if(now-lastTouch<400&&!inPanel(e.target))e.preventDefault();lastTouch=now;},{passive:false});
+  pad.addEventListener('touchstart',e=>{if(e.target.closest('.ctl'))e.preventDefault();},{passive:false});
+  lcd.addEventListener('touchstart',e=>{if(editing)e.preventDefault();},{passive:false});
+  for(const ev of ['gesturestart','gesturechange','gestureend'])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});
+  document.addEventListener('dblclick',e=>e.preventDefault(),{passive:false});})();
 window.__remu={get core(){return core;},quickSave,quickLoad,loadRom,flushSave,openSheet,startEdit,endEdit,get layouts(){return layouts;}};
 })();
 </script>
