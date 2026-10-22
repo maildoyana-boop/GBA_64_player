@@ -1,4 +1,4 @@
-# レムプレイヤー ソース
+# GBA 64MB emulator ソース
 
 このリポジトリの mgba.wasm は mGBA（MPL-2.0）の64MB対応フォーク
 https://github.com/liru55/mgba-celio-web （コミット c9470e570ccb2095e020edb2fd266858df8df95f）

@@ -2,11 +2,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="レムプレイヤー">
+<meta name="apple-mobile-web-app-title" content="GBA 64MB emulator">
 <link rel="apple-touch-icon" href="icon.png"><link rel="manifest" href="manifest.json">
 <script>window.__noClaude=true;</script>
 <style>[hidden]{display:none!important}body{margin:0;font-size:14px}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box;height:100%}img{max-width:100%}</style>
-</head><body><title>レムプレイヤー</title>
+</head><body><title>GBA 64MB emulator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
@@ -135,6 +135,10 @@ button{cursor:pointer}
 .field input[type=text],.field select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);min-width:0;width:12em}
 .field input[type=range]{width:12em}
 .kbd{font-family:ui-monospace,monospace;font-size:12px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+.binds{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 8px;align-items:center;font-size:13px}
+.binds .hd{font-size:11px;color:var(--muted);font-weight:700}
+.bindbtn{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:7px 10px;min-width:6.5em;font-size:12px;font-family:ui-monospace,monospace}
+.bindbtn.wait{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
 table.keys{border-collapse:collapse;font-size:12px}
 table.keys td{padding:3px 10px 3px 0}
 #toast{position:fixed;left:50%;top:calc(56px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:40;max-width:min(92vw,460px);
@@ -146,7 +150,7 @@ table.keys td{padding:3px 10px 3px 0}
 
 <div id="app">
   <header class="bar">
-    <span class="brand">レムプレイヤー</span>
+    <span class="brand">GBA 64MB emulator</span>
     <span class="rom-name" id="romName">ROM未選択</span>
     <button class="chip" id="btnOpen">ROM</button>
     <button class="chip" id="btnPause" disabled>一時停止</button>
@@ -157,7 +161,7 @@ table.keys td{padding:3px 10px 3px 0}
       <div id="lcd">
         <canvas id="screen" width="240" height="160" aria-label="ゲーム画面"></canvas>
         <div id="welcome">
-          <strong>REMU PLAYER</strong>
+          <strong>GBA 64MB emulator</strong>
           <p>64MBの改造ROM（ポケモンスタートなど）も、BGMつきで遊べます。ROMはこの端末の中だけで読み込みます。</p>
           <button class="chip" id="btnOpen2">ROMを開く</button>
         </div>
@@ -181,6 +185,7 @@ table.keys td{padding:3px 10px 3px 0}
     <button class="chip" data-tab="save" aria-pressed="false">セーブ</button>
     <button class="chip" data-tab="skin" aria-pressed="false">スキン</button>
     <button class="chip" data-tab="layout" aria-pressed="false">ボタン配置</button>
+    <button class="chip" data-tab="keys" aria-pressed="false">キー割り当て</button>
     <button class="chip" data-tab="opt" aria-pressed="false">設定</button>
   </nav>
 
@@ -204,7 +209,8 @@ table.keys td{padding:3px 10px 3px 0}
     </div>
     <p class="note">読み込めるのは .sav（ほかのエミュレーターのセーブ）と、このアプリで書き出した .zip です。読み込むとゲームを最初から起動し直します。</p>
     <h3>ROM</h3>
-    <label class="field"><span>開いたROMをこの端末に覚えておく（次回すぐ再開）</span><input type="checkbox" id="optRememberRom"></label>
+    <label class="field"><span>開いたROMをこの端末に覚えておく</span><input type="checkbox" id="optRememberRom"></label>
+    <label class="field"><span>次に開いたとき、覚えているROMで自動で始める</span><input type="checkbox" id="optAutoStart"></label>
     <p class="note">64MBのROMは端末の容量をかなり使います。覚えておけるのは最後に開いた1本だけです。</p>
     <div class="btnrow"><button class="btn danger" id="forgetRom">覚えているROMを消す</button></div>
   </div>
@@ -241,20 +247,19 @@ table.keys td{padding:3px 10px 3px 0}
     <p class="note">いま編集されるのは <b id="layoutOrient">縦持ち</b> の配置です。横持ちを変えたいときは、端末を横にしてから編集してください。</p>
   </div>
 
+  <div class="panel" data-panel="keys" hidden>
+    <p class="note">変えたいところを押してから、使いたいキーやコントローラーのボタンを押してください。ほかの操作に使っていたキーは、そちらから外れます。</p>
+    <p class="status" id="padStatus">コントローラー：つながっていません（つないだら、どれかボタンを押してください）</p>
+    <div class="binds" id="binds"></div>
+    <p class="note">コントローラーの左スティックは、いつでも十字キーとして使えます。</p>
+    <div class="btnrow"><button class="btn danger" id="bindReset">初期の割り当てに戻す</button></div>
+  </div>
+
   <div class="panel" data-panel="opt" hidden>
     <label class="field"><span>音量</span><input type="range" id="optVolume" min="0" max="1" step="0.05"></label>
     <label class="field"><span>早送りの速さ</span><select id="optSpeed"><option value="2">2倍</option><option value="3">3倍</option><option value="4">4倍</option></select></label>
     <label class="field"><span>メニューを開いている間は止める</span><input type="checkbox" id="optPauseMenu"></label>
     <label class="field"><span>ボタンを押すと振動する（対応端末のみ）</span><input type="checkbox" id="optHaptic"></label>
-    <h3>キーボード</h3>
-    <table class="keys"><tbody>
-      <tr><td>十字キー</td><td><span class="kbd">↑↓←→</span></td></tr>
-      <tr><td>A / B</td><td><span class="kbd">X</span> / <span class="kbd">Z</span></td></tr>
-      <tr><td>L / R</td><td><span class="kbd">A</span> / <span class="kbd">S</span></td></tr>
-      <tr><td>START / SELECT</td><td><span class="kbd">Enter</span> / <span class="kbd">Backspace</span></td></tr>
-      <tr><td>早送り（押している間）</td><td><span class="kbd">Space</span></td></tr>
-      <tr><td>クイック保存 / ロード</td><td><span class="kbd">F2</span> / <span class="kbd">F4</span></td></tr>
-    </tbody></table>
     <h3>このアプリについて</h3>
     <p class="note">エミュレーターの中身は mGBA（MPL-2.0）の64MB対応版をブラウザ向けに組み立てたものです。ROM・セーブ・スキンはすべてこの端末の中に保存され、外へは送りません。</p>
     <p class="note">ソースコード（MPL-2.0）：<br>
@@ -361,18 +366,58 @@ function audioPush(a){if(!actx||actx.state!=='running')return;pend.push(Float32A
 
 /* ---------------- input ---------------- */
 let touchKeys=0,kbdKeys=0,fastHeld=false;
-const keyMap={ArrowUp:K.UP,ArrowDown:K.DOWN,ArrowLeft:K.LEFT,ArrowRight:K.RIGHT,KeyX:K.A,KeyZ:K.B,KeyA:K.L,KeyS:K.R,Enter:K.START,Backspace:K.SELECT,ShiftRight:K.SELECT};
-addEventListener('keydown',e=>{if(e.target.closest&&e.target.closest('input,select,textarea'))return;
-  if(keyMap[e.code]){kbdKeys|=keyMap[e.code];e.preventDefault();audioResume();}
-  else if(e.code==='Space'){fastHeld=true;e.preventDefault();}
-  else if(e.code==='F2'){e.preventDefault();quickSave(curSlot);}else if(e.code==='F4'){e.preventDefault();quickLoad(curSlot);}});
-addEventListener('keyup',e=>{if(keyMap[e.code])kbdKeys&=~keyMap[e.code];else if(e.code==='Space')fastHeld=false;});
+const ACTIONS=[['up','上',K.UP],['down','下',K.DOWN],['left','左',K.LEFT],['right','右',K.RIGHT],['a','A',K.A],['b','B',K.B],['l','L',K.L],['r','R',K.R],
+  ['start','START',K.START],['select','SELECT',K.SELECT],['fast','早送り（押している間）'],['qsave','クイック保存'],['qload','クイックロード']];
+const DEFAULT_BINDS={kbd:{up:'ArrowUp',down:'ArrowDown',left:'ArrowLeft',right:'ArrowRight',a:'KeyX',b:'KeyZ',l:'KeyA',r:'KeyS',start:'Enter',select:'Backspace',fast:'Space',qsave:'F2',qload:'F4'},
+  pad:{up:12,down:13,left:14,right:15,a:1,b:0,l:4,r:5,start:9,select:8,fast:7,qsave:6,qload:10}};
+let binds=(()=>{const b=ls.get('remu-binds',null);const d=JSON.parse(JSON.stringify(DEFAULT_BINDS));if(b){Object.assign(d.kbd,b.kbd||{});Object.assign(d.pad,b.pad||{});}return d;})();
+const actBit=Object.fromEntries(ACTIONS.filter(a=>a[2]).map(a=>[a[0],a[2]]));
+let capture=null;/* {dev:'kbd'|'pad', act} */
+function kbdAction(code){for(const [a,c] of Object.entries(binds.kbd))if(c===code)return a;return null;}
+addEventListener('keydown',e=>{
+  if(capture&&capture.dev==='kbd'){e.preventDefault();if(e.code!=='Escape')setBind('kbd',capture.act,e.code);capture=null;renderBinds();return;}
+  if(e.target.closest&&e.target.closest('input,select,textarea'))return;
+  const a=kbdAction(e.code);if(!a)return;e.preventDefault();audioResume();
+  if(actBit[a])kbdKeys|=actBit[a];else if(a==='fast')fastHeld=true;else if(!e.repeat){if(a==='qsave')quickSave(curSlot);else if(a==='qload')quickLoad(curSlot);}});
+addEventListener('keyup',e=>{const a=kbdAction(e.code);if(!a)return;if(actBit[a])kbdKeys&=~actBit[a];else if(a==='fast')fastHeld=false;});
+addEventListener('blur',()=>{kbdKeys=0;fastHeld=false;});
 
 /* ---------------- main loop ---------------- */
 let acc=0,last=0,speed=1,fastToggle=false;
-function step(){const sp=(fastToggle||fastHeld)?settings.fast:1;const keys=touchKeys|kbdKeys;
+/* game controllers (Gamepad API, standard mapping: PS / Xbox / Switch Pro / MFi) */
+let padKeys=0,padFast=false;
+let gpPrev={};
+const PAD_NAMES=['×/A','○/B','□/X','△/Y','L1/LB','R1/RB','L2/LT','R2/RT','SHARE/View','OPTIONS/Menu','L3','R3','十字↑','十字↓','十字←','十字→','PS/Home'];
+const padName=i=>i==null?'—':(PAD_NAMES[i]||('ボタン'+i));
+const keyName=c=>!c?'—':c.replace(/^Key/,'').replace(/^Digit/,'').replace('ArrowUp','↑').replace('ArrowDown','↓').replace('ArrowLeft','←').replace('ArrowRight','→').replace('Backspace','BS').replace(/^Numpad/,'テンキー');
+function getPads(){try{return [...(navigator.getGamepads?navigator.getGamepads():[])].filter(Boolean);}catch(_){return [];}}
+const gpDown=(g,i)=>!!(g.buttons[i]&&(g.buttons[i].pressed||g.buttons[i].value>0.5));
+function pollPads(){let k=0,f=false;
+  for(const g of getPads()){const prev=gpPrev[g.index]||[];const now=g.buttons.map((_,i)=>gpDown(g,i));
+    for(const [a,i] of Object.entries(binds.pad)){if(i==null||!now[i])continue;
+      if(actBit[a])k|=actBit[a];else if(a==='fast')f=true;else if(!prev[i]){if(a==='qsave')quickSave(curSlot);else if(a==='qload')quickLoad(curSlot);}}
+    const ax=g.axes[0]||0,ay=g.axes[1]||0;if(ax<-0.5)k|=K.LEFT;if(ax>0.5)k|=K.RIGHT;if(ay<-0.5)k|=K.UP;if(ay>0.5)k|=K.DOWN;
+    gpPrev[g.index]=now;}
+  padKeys=k;padFast=f;}
+function setBind(dev,act,v){for(const [a,x] of Object.entries(binds[dev]))if(x===v&&a!==act)binds[dev][a]=null;binds[dev][act]=v;ls.set('remu-binds',binds);
+  kbdKeys=0;fastHeld=false;toast(ACTIONS.find(a=>a[0]===act)[1]+' を '+(dev==='kbd'?keyName(v):padName(v))+' にしました');}
+function renderBinds(){const box=$('binds');if(!box)return;box.textContent='';
+  for(const t of ['操作','キーボード','コントローラー']){const h=document.createElement('span');h.className='hd';h.textContent=t;box.append(h);}
+  for(const [a,label] of ACTIONS){const n=document.createElement('span');n.textContent=label;box.append(n);
+    for(const dev of ['kbd','pad']){const b=document.createElement('button');b.className='bindbtn';b.type='button';
+      const w=capture&&capture.dev===dev&&capture.act===a;b.classList.toggle('wait',w);
+      b.textContent=w?(dev==='kbd'?'キーを押す…':'ボタンを押す…'):(dev==='kbd'?keyName(binds.kbd[a]):padName(binds.pad[a]));
+      b.onclick=()=>{capture=w?null:{dev,act:a};renderBinds();if(capture&&dev==='pad')padCapture();};box.append(b);}}
+  const ps=getPads();$('padStatus').textContent=ps.length?'コントローラー：'+ps.map(g=>(g.id||'').replace(/\s*\(.*$/,'').slice(0,30)).join('、'):'コントローラー：つながっていません（つないだら、どれかボタンを押してください）';}
+function padCapture(){const base={};for(const g of getPads())base[g.index]=g.buttons.map((_,i)=>gpDown(g,i));
+  const tick=()=>{if(!capture||capture.dev!=='pad')return;for(const g of getPads()){const b0=base[g.index]||[];
+      for(let i=0;i<g.buttons.length;i++){const d=gpDown(g,i);if(d&&!b0[i]){setBind('pad',capture.act,i);capture=null;gpPrev[g.index]=g.buttons.map((_,k)=>gpDown(g,k));renderBinds();return;}if(!d)b0[i]=false;}base[g.index]=b0;}
+    requestAnimationFrame(tick);};requestAnimationFrame(tick);}
+addEventListener('gamepadconnected',e=>{renderBinds();toast('コントローラーをつなぎました（'+(e.gamepad.id||'').replace(/\s*\(.*$/,'').slice(0,30)+'）');});
+addEventListener('gamepaddisconnected',()=>{renderBinds();toast('コントローラーが外れました');});
+function step(){const sp=(fastToggle||fastHeld||padFast)?settings.fast:1;const keys=touchKeys|kbdKeys|padKeys;
   for(let i=0;i<sp;i++){core.frame(keys);const a=core.audio();if(a&&sp===1)audioPush(a);}}
-function loop(t){requestAnimationFrame(loop);if(!running){last=t;return;}
+function loop(t){requestAnimationFrame(loop);if(!running){last=t;return;}pollPads();
   let dt=t-last;last=t;if(dt>100)dt=FRAME_MS;acc+=dt;let n=0;while(acc>=FRAME_MS&&n<4){step();acc-=FRAME_MS;n++;}if(n===4)acc=0;if(n)blit();}
 requestAnimationFrame(loop);
 function updateRunning(){const menuOpen=!$('sheet').hidden&&settings.pauseMenu;const editing=!$('editBar').hidden;
@@ -382,7 +427,8 @@ document.addEventListener('visibilitychange',()=>{updateRunning();if(document.hi
 addEventListener('pagehide',()=>flushSave());
 
 /* ---------------- settings ---------------- */
-const settings=Object.assign({volume:0.8,fast:3,pauseMenu:true,haptic:true,rememberRom:false},ls.get('remu-settings',{}));
+const settings=Object.assign({volume:0.8,fast:3,pauseMenu:true,haptic:true,rememberRom:true,autoStart:true},ls.get('remu-settings',{}));
+if(!settings.rememberV2){settings.rememberV2=true;settings.rememberRom=true;try{localStorage.setItem('remu-settings',JSON.stringify(settings));}catch(_){}}
 function saveSettings(){ls.set('remu-settings',settings);}
 
 /* ---------------- ROM loading ---------------- */
@@ -402,7 +448,7 @@ async function loadRom(u,name,fromStore){
   loaded=true;$('welcome').hidden=true;userPaused=false;['btnPause','saveExport','saveImport','stateExport','stateImport','btnReset'].forEach(i=>$(i).disabled=false);
   updateRunning();refreshSaveStatus(restored);await refreshSlots();audioResume();
   toast(restored?'ROMを開きました。前回のセーブも読み込みました':'ROMを開きました');
-  if(settings.rememberRom&&!fromStore){try{await idb.set('rom:last',{name,data:u.buffer.slice(u.byteOffset,u.byteOffset+u.length)});}catch(e){toast(storageError(e),true);}}
+  if(settings.rememberRom&&!fromStore){try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist().catch(()=>{});}catch(_){}try{await idb.set('rom:last',{name,data:u.buffer.slice(u.byteOffset,u.byteOffset+u.length)});}catch(e){toast(storageError(e),true);}}
   refreshStorage();}
 function pickRom(){$('romFile').click();}
 $('btnOpen').onclick=pickRom;$('btnOpen2').onclick=pickRom;
@@ -598,7 +644,7 @@ $('skExport').onclick=async()=>{const s=customSkins.find(x=>x.id===skinId);if(!s
   await offerFile((s.name||'skin')+'.json',JSON.stringify(out));};
 $('skinImport').onclick=()=>$('skinFile').click();
 $('skinFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
-  try{const o=JSON.parse(await f.text());if(o.format!=='remu-skin-1')throw new Error('レムプレイヤーのスキンではないようです');
+  try{const o=JSON.parse(await f.text());if(o.format!=='remu-skin-1')throw new Error('GBA 64MB emulatorのスキンではないようです');
     const id='c'+Date.now().toString(36);const s={id,custom:true,name:String(o.name||'読み込んだスキン').slice(0,20),img:false};
     for(const k of Object.values(SK_FIELDS))s[k]=o[k]!==undefined?o[k]:currentSkin()[k];s.pattern=o.pattern||'none';
     if(o.image&&/^data:image\//.test(o.image)){const b=await (await fetch(o.image)).arrayBuffer();await idb.set('skinimg:'+id,b);s.img=true;}
@@ -607,8 +653,8 @@ $('skinFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(
 
 /* ---------------- sheet ---------------- */
 function openSheet(tab){$('sheet').hidden=false;$('scrim').hidden=false;if(tab)showTab(tab);updateRunning();refreshStorage();refreshSlots();renderSkins();}
-function closeSheet(){$('sheet').hidden=true;$('scrim').hidden=true;updateRunning();}
-function showTab(t){for(const b of document.querySelectorAll('.tabs button'))b.setAttribute('aria-pressed',String(b.dataset.tab===t));
+function closeSheet(){capture=null;$('sheet').hidden=true;$('scrim').hidden=true;updateRunning();}
+function showTab(t){if(t==='keys')renderBinds();for(const b of document.querySelectorAll('.tabs button'))b.setAttribute('aria-pressed',String(b.dataset.tab===t));
   for(const p of document.querySelectorAll('.panel'))p.hidden=p.dataset.panel!==t;ls.set('remu-tab',t);}
 document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
 $('btnMenu').onclick=()=>openSheet();$('btnClose').onclick=closeSheet;$('scrim').onclick=closeSheet;
@@ -623,13 +669,18 @@ $('optSpeed').value=String(settings.fast);$('optSpeed').onchange=e=>{settings.fa
 $('optPauseMenu').checked=settings.pauseMenu;$('optPauseMenu').onchange=e=>{settings.pauseMenu=e.target.checked;saveSettings();updateRunning();};
 $('optHaptic').checked=settings.haptic;$('optHaptic').onchange=e=>{settings.haptic=e.target.checked;saveSettings();};
 $('optRememberRom').checked=settings.rememberRom;$('optRememberRom').onchange=async e=>{settings.rememberRom=e.target.checked;saveSettings();if(!settings.rememberRom){try{await idb.del('rom:last');}catch(_){}refreshStorage();}};
+$('optAutoStart').checked=settings.autoStart;$('optAutoStart').onchange=e=>{settings.autoStart=e.target.checked;saveSettings();};
+$('bindReset').onclick=()=>{binds=JSON.parse(JSON.stringify(DEFAULT_BINDS));ls.set('remu-binds',binds);capture=null;renderBinds();toast('割り当てを初期に戻しました');};
 $('forgetRom').onclick=async()=>{try{await idb.del('rom:last');toast('覚えていたROMを消しました（セーブは残っています）');}catch(e){toast(storageError(e),true);}refreshStorage();};
 
 /* ---------------- boot ---------------- */
 applySkin();applyLayout();refreshSlots();
 (async()=>{try{await getWasm();}catch(e){toast(e.message,true);return;}
   if(settings.rememberRom){try{const r=await idb.get('rom:last');if(r&&r.data){$('welcome').querySelector('p').textContent='前回のROM「'+r.name+'」を覚えています。';
-    const b=document.createElement('button');b.className='chip';b.textContent='続きから遊ぶ';b.onclick=async()=>{audioResume();try{await loadRom(new Uint8Array(r.data),r.name,true);}catch(err){toast(err.message,true);}};$('btnOpen2').before(b);}}catch(_){}}})();
+    const go=async()=>{audioResume();try{await loadRom(new Uint8Array(r.data),r.name,true);}catch(err){toast(err.message,true);}};
+    const b=document.createElement('button');b.className='chip';b.textContent='続きから遊ぶ';b.onclick=go;$('btnOpen2').before(b);
+    if(settings.autoStart)go();}}catch(_){}}})();
+document.addEventListener('pointerdown',()=>audioResume(),{capture:true});
 try{navigator.wakeLock&&document.addEventListener('pointerdown',()=>{if(loaded&&!window.__wl)navigator.wakeLock.request('screen').then(l=>{window.__wl=l;l.addEventListener('release',()=>window.__wl=null);}).catch(()=>{});});}catch(_){}
 /* iOS Safari ignores user-scalable=no: stop double-tap zoom and pinch zoom ourselves */
 (()=>{let lastTouch=0;const inPanel=t=>t.closest&&t.closest('.panel input,.panel select,.panel textarea,#editBar input');
